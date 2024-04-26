@@ -1,0 +1,435 @@
+---
+title: "Final Project: NHL Shot Statistics, The Effect of Defending Ice Time on Expected Goals and Shot Outcomes"
+author: [Connor Raney]
+date: April 28, 2024
+format: html
+self-contained: true
+editor: source
+theme: materia
+toc: true
+toc-depth: 2
+---
+
+# Introduction
+
+For my final project, I will be working alone, and will be doing it on the topic of hockey data. There is a wide variety of hockey data, but some of the most interesting data to me is shot data. Every single shot that has been taken over the past 15-20 years has been tracked with over 140 variables per shot, giving the most context possible to characterize every single kind of shot being taken.
+	Now, why is this data important to study? Shot data is some of the most important data in hockey, as it is used as the base of all hockey statistics. Shot data is used to calculate xGoals (expected goals) which is one of the main drivers for determining:
+1.	The performance of a given team
+2. The performance of a given teams’ goalie
+
+Using a model the probability of each shot being a goal is calculated using factors such as the distance from the net, angle of the shot, type of shot, and what happened before the shot, amongst other factors. Now, by adding up the probabilities of a team’s shots during a game, you can calculate a team’s expected goals, and essentially measure the amount of offense that was generated during a game. This can also be used to see if a team got ‘unlucky’ or ‘goalied’ (outplayed by the other teams’ goalie and could’ve easily won the game if they got anywhere near their xG amount) or if a team simply just did not generate enough offense. It can also be used to see the performance of all goalies in the league, as the main driver for the ‘best’ goalie every season is their goals saved above expected (xG – Actual Goals). Now, as you can see the base of almost all team statistics is based off xG, which is based off all the shot data collected. 
+
+In addition to this, the Moneypuck model, amongst other models, has xGoal, xFroze (puck stopped by the goalie and whistle blown), xRebound (the shot creates a rebound), xPlayContinuedInZone (the play continues), xPlayContinuedOutsideZone (vice versa), and xPlayStopped (play stopped for other reason, ex. puck goes into the netting and out of play), will all total up to 1, as these are all the possible options that can come from a shot. 
+Having given some background to what shot data is, and what xGoals are, you can now see why shot data is so important in hockey as it is used not only for these important calculations, but much more. Moneypuck, a hockey statistics and prediction website, has publicly accessible shot data, totaling up to 1,717,746 shots from the 2007-2022 seasons, in addition to almost 100,000 shots from this season so far. They also have a full description of all the variables in addition to more details with a full csv data dictionary which I will attach. Moneypuck shot data is collected both from the ‘semi-public’ NHL API, ESPN, and other sources which help them to compile a full dataset of shot data to work with.
+
+
+# The Question
+
+Here is one possible question that I have constructed using the Moneypuck data that I believe would work well for research question: Influence of Defensive Player Fatigue on Offensive Expected Goals: Does the amount of time a team collectively has been on the ice affect the other (offensive) team’s generation of offensive chances, measured by expected goals (xGoals)? Outcome Variable (Dependent Variable): xGoals: The expected goals value of each shot taken by the offensive team. Treatment Variable (Independent Variable): defensiveTeamIceTime: This would be a constructed variable representing the total amount of time the defensive team's players have collectively spent on the ice up to the point of each shot taken by the offensive team. Can be calculated based on the following variables: defendingTeamForwardsOnIce, defendingTeamDefencemenOnIce, defendingTeamAverageTimeOnIceOfForwards, and defendingTeamAverageTimeOnIceOfDefencemen. Potential Confounders: shotDistance: The distance from the net at which the shot is taken. shotType: The type of shot (e.g., slap, wrist, backhand). shotAngle: The angle of the shot relative to the goal. speedFromPreviousEvent: The speed of the player from the previous event to the shot. manAdvantageSituation: The man advantage situation (e.g., power play, even strength). defensiveTeamSkaters: The number of skaters on the ice for the defensive team. timeSinceLastEvent: The time elapsed since the last game event before the shot. Potential Colliders: flurryAdjustedXGoals: The flurry adjusted expected goals value might be influenced by both the defensive team's ice time (as it affects the likelihood of flurries) and the regular xGoals (as it is a modified version of xGoals). We can also investigate xGoals vs. Shot Outcomes in these cases to see if more ice time may be associated with more goals against vs. expected.
+
+# Data
+
+From Moneypuck, "All historical shot data is available to download. This includes 1,717,746 shots from the 2007-2008 to 2022-2023 seasons. Data for the 2023-2024 season is also available and updated nightly on this page. Saved shots on goal, missed shots, and goals are included. Blocked shots are not included in these datasets. There are 124 attributes for each shot, including everything from the player and goalie involved in the shot to angles, distances, what happened before the shot, and how long players had been on the ice when the shot was taken. Each shot also has model scores for its probability of being a goal (xGoals) as well as other models such as for the chance there will be a rebound after the shot, the probability the shot will miss the net, and whether the goalie will freeze the puck after the shot. The data has been collected from several sources including the NHL and ESPN. A good amount of data cleaning has also been done on the data. Arena adjusted shot coordinates and distances are also calculated in the dataset using the strategy War-On-Ice used from the method proposed by Schuckers and Curros."
+
+We will only be using the data from the 2022-2023 and 2023-2024 season however, as the dataset with 1.7m shots is just too large to use for the computing power that I have access to for this project.
+
+The data has been downloded from Moneypuck with all shots as of 2024-04-25 14:45 Eastern Time. You can find the data at the following link: https://moneypuck.com/data.htm
+
+# Data Dictionary
+
+Variable	Definition	
+shotID	Unique id for each shot	
+homeTeamCode	The home team in the game. For example: TOR, MTL, NYR, etc	
+awayTeamCode	The away team in the game	
+season	Season the shot took place in. Example: 2009 for the 2009-2010 season	
+isPlayoffGame	Set to 1 if a playoff game, otherwise 0	
+game_id	The NHL Game_id of the game the shot took place in	
+homeTeamWon	Set to 1 if the home team won the game. Otherwise 0.	
+id	The event # of the shot in the game	
+time	Seconds into the game of the shot	
+timeUntilNextEvent	Time between the shot and the next event that happens in the game after the shot	
+timeSinceLastEvent	Time between the shot and the event that took place before the shot	
+period	Period of the game	
+team	The team taking the shot. HOME or AWAY	
+location	The zone the shot took place in. HOMEZONE, AWAYZONE, or Neu. Zone	
+event	Whether the shot was a shot on goal (SHOT), goal, (GOAL), or missed the net (MISS)	
+goal	Set to 1 if shot was a goal. Otherwise 0	
+shotPlayContinuedOutsideZone	Set to 1 if play continued after the shot. (not a goal, goalie stop, or out of play), but the next event was outside of the attacking zone. Otherwise 0.	
+shotPlayContinuedInZone	Set to 1 if play continued after the shot. (not a goal, goalie stop, or out of play) and the next event was inside the attacking zone. Otherwise 0.	
+shotGoalieFroze	Set to 1 if the goalie froze the puck within 1 second of the shot. Otherwise 0	
+shotPlayStopped	Set to 1 if the play stopped after the shot for a reason beyond a goalie freeze. (Puck went outside the playing surface, dislodged net, etc). Otherwise 0	
+shotGeneratedRebound	Set to 1 if the shot generated a rebound shot within 3 seconds of the this shot.	
+homeTeamGoals	Home team goals before the shot took place	
+awayTeamGoals	Away team goals before the shot took palce	
+xCord	The X coordinate "North South" on the ice of the shot. Feet from red line.  -89 and 89 are the goal lines at each of the rink	
+yCord	The Y coordinate  "East West" on the ice of the shot. The middle of the ice has a y-coordinate of 0	
+xCordAdjusted	Adjusts the x coordinate as if all shots were at the right end of the rink. Usually makes the coordinate a positive number	
+yCordAdjusted	Adjusts the y coordinate as if all shots were at the right end of the rink.	
+shotAngle	The angle of the shot in degrees. Is a positive number if the shot is from the left side of the ice. 	
+shotAngleAdjusted	The absolute value of the shot angle	
+shotAnglePlusRebound	The difference in angle between the previous shot and this shot if this shot is a rebound. Is otherwise set to 0	
+shotAngleReboundRoyalRoad	Set to 1 if the puck went through the middle of the between this shot and previous shot if this shot is a rebound.	
+shotDistance	The distance from the net of the shot in feet. Net is defined as being at the (89,0) coordinates	
+shotType	Type of the shot. (Slap, Wrist, etc)	
+shotOnEmptyNet	Set to 1 if the shot was on an empty net. Otherwise 0.	
+shotRebound	Set to 1 if the shot is a rebound. (If the last event was a shot and within 3 seconds of this shot)	
+shotAnglePlusReboundSpeed	The shotAnglePlusRebound variable divded by time between the last shot and this one. (How fast the angle changed)	
+shotRush	Set to 1 if the shot was on a rush. (If the last event was in another zone and within 4 seconds)	
+speedFromLastEvent	The distance between the shot location and the previous event's location divded by the number of seconds between them	
+lastEventxCord	The x coorinate of the last event before the shot	
+lastEventyCord	The y coorinate of the last event before the shot	
+distanceFromLastEvent	The distance between the shot location and the previous event's location in feet	
+lastEventShotAngle	The shot angle of the shot directly before this shot. (If the last event was a shot)	
+lastEventShotDistance	The shot distance of the shot directly before this shot. (If the last event was a shot)	
+lastEventCategory	The type of event before the shot.Shot, hit, etc. 	
+lastEventTeam	The team that did the last event. HOME or AWAY. If last event was a faceoff is the team that won the faceoff	
+homeEmptyNet	Whether the home team's net is empty at the time of the shot	
+awayEmptyNet	Whether the away team's net is empty at the time of the shot	
+homeSkatersOnIce	The number of skaters on the ice for the home team. Does not count the goalie	
+awaySkatersOnIce	The number of skaters on the ice for the away team. Does not count the goalie	
+awayPenalty1TimeLeft	The number of seconds left in the penalty on the away team. If the penalty that will expire first if multiple penalities	
+awayPenalty1Length	The total length in seconds of the penalty on the away team. Is the penalty that will expire first if multiple penalities on the away team	
+homePenalty1TimeLeft	The number of seconds left in the penalty on the home team. If the penalty that will expire first if multiple penalities	
+homePenalty1Length	The total length in seconds of the penalty on the home team. Is the penalty that will expire first if multiple penalities on the home team	
+playerPositionThatDidEvent	The position of the player doing the shot. L for Left Wing, R for Right Wing, D for Defenceman, C for Centre.	
+playerNumThatDidEvent	The jersey number of the player that took the shot	
+playerNumThatDidLastEvent	The jersey number of the player that did the last event before the shot. Only populated if the previous event is a shot attempt. Otherwise 0.	
+lastEventxCord_adjusted	Adjusts the last event's x coordinate similar to the other adjusted coordinate variables	
+lastEventyCord_adjusted	Adjusts the last event's y coordinate similar to the other adjusted coordinate variables	
+timeSinceFaceoff	Seconds since there has been a faceoff at the time of the shot	
+goalieIdForShot	The NHL player id for the goalie the shot is on. 	
+goalieNameForShot	The First and Last name of the goalie the shot is on.	
+shooterPlayerId	The NHL player id of the skater taking the shot	
+shooterName	The First and Last name of the player taking the shot	
+shooterLeftRight	Whether the shooter is a left or right shot. L/R	
+shooterTimeOnIce	playing time in seconds that have passed since the shooter started their shift	
+shooterTimeOnIceSinceFaceoff	The minimum of the  playing time in seconds since the last faceoff and the playing time that has passed since the shooter started their shift	
+shootingTeamForwardsOnIce	Number of forwards the shooting team has on the ice	
+shootingTeamDefencemenOnIce	Number of defencemen the shooting team has on the ice	
+shootingTeamAverageTimeOnIce	The average playing time in seconds the shooting team's players have been on the ice	
+shootingTeamAverageTimeOnIceOfForwards	The average playing time in seconds the shooting team's forwards have been on the ice	
+shootingTeamAverageTimeOnIceOfDefencemen	The average playing time in seconds the shooting team's defencemen have been on the ice	
+shootingTeamMaxTimeOnIce	The maximum playing time in seconds the shooting team's players have been on the ice	
+shootingTeamMaxTimeOnIceOfForwards	The maximum playing time in seconds the shooting team's forwards have been on the ice	
+shootingTeamMaxTimeOnIceOfDefencemen	The maximum playing time in seconds the shooting team's defencemen have been on the ice	
+shootingTeamMinTimeOnIce	The minimum playing time in seconds the shooting team's players have been on the ice	
+shootingTeamMinTimeOnIceOfForwards	The minimum playing time in seconds the shooting team's forwards have been on the ice	
+shootingTeamMinTimeOnIceOfDefencemen	The minimum playing time in seconds the shooting team's defencemen have been on the ice	
+shootingTeamAverageTimeOnIceSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+shootingTeamAverageTimeOnIceOfForwardsSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+shootingTeamAverageTimeOnIceOfDefencemenSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+shootingTeamMaxTimeOnIceSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+shootingTeamMaxTimeOnIceOfForwardsSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+shootingTeamMaxTimeOnIceOfDefencemenSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+shootingTeamMinTimeOnIceSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+shootingTeamMinTimeOnIceOfForwardsSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+shootingTeamMinTimeOnIceOfDefencemenSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+defendingTeamForwardsOnIce	Number of forwards the defending team has on the ice	
+defendingTeamDefencemenOnIce	Number of defencemen the defending team has on the ice	
+defendingTeamAverageTimeOnIce	The average playing time in seconds the shooting team's players have been on the ice	
+defendingTeamAverageTimeOnIceOfForwards	The average playing time in seconds the shooting team's forwards have been on the ice	
+defendingTeamAverageTimeOnIceOfDefencemen	The average playing time in seconds the shooting team's defencemen have been on the ice	
+defendingTeamMaxTimeOnIce	The maximum playing time in seconds the shooting team's players have been on the ice	
+defendingTeamMaxTimeOnIceOfForwards	The maximum playing time in seconds the shooting team's forwards have been on the ice	
+defendingTeamMaxTimeOnIceOfDefencemen	The maximum playing time in seconds the shooting team's defencemen have been on the ice	
+defendingTeamMinTimeOnIce	The minimum playing time in seconds the shooting team's players have been on the ice	
+defendingTeamMinTimeOnIceOfForwards	The minimum playing time in seconds the shooting team's forwards have been on the ice	
+defendingTeamMinTimeOnIceOfDefencemen	The minimum playing time in seconds the shooting team's defencemen have been on the ice	
+defendingTeamAverageTimeOnIceSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+defendingTeamAverageTimeOnIceOfForwardsSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+defendingTeamAverageTimeOnIceOfDefencemenSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+defendingTeamMaxTimeOnIceSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+defendingTeamMaxTimeOnIceOfForwardsSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+defendingTeamMaxTimeOnIceOfDefencemenSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+defendingTeamMinTimeOnIceSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+defendingTeamMinTimeOnIceOfForwardsSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+defendingTeamMinTimeOnIceOfDefencemenSinceFaceoff	Same as equivalent variable above but only counting seconds since the faceoff if the player was on the ice before the faceoff	
+offWing	Set to 1 if the shot is from the left side of the ice and the shooter is a right shot, or vice-versa. Otherwise 0	
+arenaAdjustedShotDistance	The shot distance adjusted for arena recording bias. Uses the same methodology as War On Ice proposed by Schuckers and Curro. blog.war-on-ice.com/	
+arenaAdjustedXCord	The x coordinate of the arena adjusted shot location. Always a positive number	
+arenaAdjustedYCord	The y coordinate of the arena adjusted shot location	
+arenaAdjustedYCordAbs	The absolute value of the arena adjusted y coordinate	
+timeDifferenceSinceChange	The shooting team's minimum time on ice of any player minus the defending team's minimum time on ice of any player	
+averageRestDifference	The shooting team's average time on ice since a faceoff minus the defending team's average time on ice since a faceoff	
+xGoal	The probability the shot will be a goal. Also known as "Expected Goals"	
+xFroze	The probability the goalie will freeze the puck and their will be a stoppage of play within 1 second of the shot	
+xRebound	The probability there will be another shot within 3 seconds of this shot occuring	
+xPlayContinuedInZone	The probability that the play will continue in the zone after the shot. Defined as the next event after the shot also occuring in the offensive zone and no player changes occuring. Does not include the xRebound probability	
+xPlayContinuedOutsideZone	The probability that the play leaves the zone after the shot.	
+xPlayStopped	The probability the play stops after the shot for a reason other than a goal or goalie freezing the puck. For example, the puck is shot into the netting or the net is dislodged, etc.	
+xShotWasOnGoal	The probability the shot was on net. (Either a goal or a goalie save)	
+isHomeTeam	Set to 1 if the shooting team is the home team	
+shotWasOnGoal	Set to 1 if the shot was on net. (Either a goal or a goalie save)	
+teamCode	The team code of the shooting team. For example, TOR, NYR, etc	
+arenaAdjustedXCordABS	Absolute value of the arenaAdjustedXCord	
+		
+		
+		
+	Notes:	
+		
+	If there was an empty net the goalie name will be blank	
+	The model scores for xGoal, xFroze, xRebound, xPlayContinuedInZone, xPlayContinuedOutsideZone, and xPlayStopped will sum up to 1	
+	If time on ice variables are not available, they are set to 999 for the 'minimum' variables and 0 for the 'maximum' variables. This occures for a few shots per season on average, mostly in 2007 and 2008.	
+	The shot distance adjustment algorithm designed by proposed by Schuckers and Curros used in this dataset is explained here: http://www.sloansportsconference.com/wp-content/uploads/2013/Total%20Hockey%20Rating%20(THoR)%20A%20comprehensive%20statistical%20rating%20of%20National%20Hockey%20League%20forwards%20and%20defensemen%20based%20upon%20all%20on-ice%20events.pdf	
+	The data has been collected from several sources including the NHL and ESPN	
+	No guarantees are made to the quality of the data. NHL shot data is known to have issues and biases.	
+	Please reach out through MoneyPuck.com if you have any feedback	
+	You are welcome to use this data in any work. Just please cite MoneyPuck.com
+
+
+# Set your working directory 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+setwd("/Users/connorraney/Desktop/desktop/QTM3605/scripts/Final Project")
+```
+
+# 1. Importing the Data
+
+Importing the Moneypuck Dataset & Examining the initial variables. After merging these two datasets together, we have 238,304 shots in total from the 2022-2023 season and the 2023-2024 data. I was looking forward to using all of the data we have available, but we will have to settle for just these two seasons as the dataset for all of them is just too large.
+
+```{r}
+# Import 2022-2023 data
+shots2022 <- read.csv("shots_2022.csv") 
+
+# Import 2023-2024 shot data
+shots2023 <- read.csv("shots_2023.csv")
+
+# Now, we need to merge these two together into one big dataset. We can do this by using the rbind() function.
+shots <- rbind(shots2022, shots2023)
+```
+
+
+# 2. Evaluating the Variables & Cleaning the Data for analysis
+
+We have a few things we need to figure out here. First of all, we clearly see by the data dictionary that the ice time variables include defendingTeamAverageTimeOnIce, defendingTeamMaxTimeOnIce, etc.
+Overall, the most useful variable for our investigation is going to be the defendingTeamAverageTimeOnIce, but, there are going to be many other variables that can give us an insight into the ice time patterns and how they relate to outcomes. 
+- defendingTeamAverageTimeOnIce (our main measure of how much time the defending team has spent on ice at the time of the shot, on average, across all skaters)
+- defendingTeamMaxTimeOnIce	(The maximum playing time in seconds the shooting team's players have been on the ice)
+- defendingTeamAverageTimeOnIceOfForwards	The average playing time in seconds the shooting team's forwards have been on the ice	
+- defendingTeamAverageTimeOnIceOfDefencemen	The average playing time in seconds the shooting team's defencemen have been on the ice	
+- defendingTeamMaxTimeOnIceOfForwards (The maximum playing time in seconds the shooting team's forwards have been on the ice)
+- defendingTeamMaxTimeOnIceOfDefencemen (The maximum playing time in seconds the shooting team's defencemen have been on the ice)
+list diff defending variables
+Also, we have to consider situationally what we are measuring and what outcomes we are expecting. For example, the average time on ice for a team will change mostly likely from even strength (5v5), versus a power play, versus an empty net situation. So, we may want to filter the data to first focus on 5v5 outcomes, and then expand to look at other situations later, like power plays (5v4) and other situations that will arise.
+For this reason, we will break up the situations into:
+- 5v5 (even strength): filter(shots, situation == "5v5")
+- All others: so this is any situation where there are a different number of skaters on each team, and we are doing this for simplicities sake, as if we were to go through and have all of the possible situations, we would have way too many for our analysis to be done in a productive manner for this project.
+
+
+```{r}
+## Load the dplyr library
+library(dplyr)
+
+# Create new variables for the total number of skaters on ice for both shooting and defending teams
+shots <- shots %>%
+  mutate(
+    shootingTeamSkatersOnIce = shootingTeamForwardsOnIce + shootingTeamDefencemenOnIce,
+    defendingTeamSkatersOnIce = defendingTeamForwardsOnIce + defendingTeamDefencemenOnIce
+  )
+
+# Check for any missing data before we create filters
+
+# Check for missing data in the 'shootingTeamSkatersOnIce' and 'defendingTeamSkatersOnIce' columns
+missing_shooting_skaters <- sum(is.na(shots$shootingTeamSkatersOnIce))
+missing_defending_skaters <- sum(is.na(shots$defendingTeamSkatersOnIce))
+
+# Print out the number of missing values
+print(paste("Missing values in shootingTeamSkatersOnIce:", missing_shooting_skaters))
+print(paste("Missing values in defendingTeamSkatersOnIce:", missing_defending_skaters))
+
+# The results come out as 0 for both, so we can then move onto filtering the data
+
+# Filter for even strength (5v5)
+even_strength_shots <- shots %>%
+  filter(shootingTeamSkatersOnIce == 5 & defendingTeamSkatersOnIce == 5)
+
+# Filter for non-even strength (not 5v5)
+non_even_strength_shots <- shots %>%
+  filter(shootingTeamSkatersOnIce != 5 | defendingTeamSkatersOnIce != 5)
+
+# Count the number of shots in the main dataframe
+total_shots <- nrow(shots)
+
+# Count the number of shots in the even strength subset
+even_strength_count <- nrow(even_strength_shots)
+
+# Count the number of shots in the non-even strength subset
+non_even_strength_count <- nrow(non_even_strength_shots)
+
+# Print the counts to verify
+print(paste("Total shots:", total_shots))
+print(paste("Even strength shots:", even_strength_count))
+print(paste("Non-even strength shots:", non_even_strength_count))
+
+# Check if the sum of subsets equals the total number of shots
+if (total_shots == even_strength_count + non_even_strength_count) {
+  print("The counts match! The sum of even and non-even strength shots equals the total number of shots.")
+} else {
+  print("There is a discrepancy in the counts. Please check the data and filtering criteria.")
+}
+
+# Check what the mean ice time is for both shooting and defending teams & store for later use, for all situations, even strength, and non-even strength
+# All situations
+meanDefendingTeamIceTimeAllSituations <- mean(shots$defendingTeamAverageTimeOnIce)
+meanShootingTeamIceTimeAllSituations <- mean(shots$shootingTeamAverageTimeOnIce)
+# Even Strength
+meanDefendingTeamIceTimeEvenStrength <- mean(even_strength_shots$defendingTeamAverageTimeOnIce)
+meanShootingTeamIceTimeEvenStrength <- mean(even_strength_shots$shootingTeamAverageTimeOnIce)
+# Non-Even Strength
+meanDefendingTeamIceTimeNonEvenStrength <- mean(non_even_strength_shots$defendingTeamAverageTimeOnIce)
+meanShootingTeamIceTimeNonEvenStrength <- mean(non_even_strength_shots$shootingTeamAverageTimeOnIce)
+
+
+# Create a variable for the iceTimeDifference in the offensiveTeam - defendingTeam to measure how the difference in offensiveIceTime vs defensiveIceTime affects the amount of xGoals that are given up, and then we will store this for later use
+# All situations
+shots$shootingTeamIceTimeDifferenceAllSituations <- shots$shootingTeamAverageTimeOnIce - shots$defendingTeamAverageTimeOnIce
+# Even strength
+even_strength_shots$shootingTeamIceDifferenceEvenStrength <- even_strength_shots$shootingTeamAverageTimeOnIce - even_strength_shots$defendingTeamAverageTimeOnIce
+# Non-Even Strength
+non_even_strength_shots$shootingTeamIceDifferenceNonEvenStrength <- non_even_strength_shots$shootingTeamAverageTimeOnIce - non_even_strength_shots$defendingTeamAverageTimeOnIce
+
+
+# Save the means for later use
+# All situations
+averageShootingTeamIceTimeDifferenceAllSituations <- meanShootingTeamIceTimeAllSituations - meanDefendingTeamIceTimeAllSituations
+# Even Strength
+averageShootingTeamIceTimeDifferenceEvenStrength <- meanShootingTeamIceTimeEvenStrength - meanDefendingTeamIceTimeEvenStrength
+# Non-Even Strength
+averageShootingTeamIceTimeDifferenceNonEvenStrength <- meanShootingTeamIceTimeNonEvenStrength - meanDefendingTeamIceTimeNonEvenStrength
+```
+
+
+# 3. Visualizing our data
+```{r}
+# Load the ggplot2 library
+library(ggplot2)
+# defendingTeamAverageTimeOnIce vs xGoal - linear regression
+ggplot(shots, aes(x=defendingTeamAverageTimeOnIce, y=xGoal)) +
+  geom_point() +
+  geom_smooth(method="lm")
+
+# Same but with logistic regression
+ggplot(shots, aes(x=defendingTeamAverageTimeOnIce, y=xGoal)) +
+  geom_point(alpha=0.4) +
+  geom_smooth(method="glm", method.args=list(family=binomial(link="logit")), se=TRUE, color="blue")
+```
+
+
+
+
+# 4. Running Linear Regressions to analyze our data
+
+Here, we are going to run 3 groups of regressions. All will include regressions run on all situations, then with even strength shots, and then with non-even strength shots. We can then look at the results and estimate the significance and the effects of ice time on the expected goals. Then, in total we will have a group of 9 regressions to analyze, with a good mix of situations and different types to investigate. We will define the models in a list, and then we will create a tidy summary of each model and store it in a dataframe, and then display it in a table to see the results in an easy to read manner. 
+1. Defending Ice Time
+2. Shooting Ice Time
+3. Offensive Ice Time - Defensive Ice Time (Ice Time Difference)
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(modelsummary)
+
+# Define the regression models
+defendingTeamAllSituations <- lm(xGoal ~ defendingTeamAverageTimeOnIce, data = shots)
+defendingTeamEvenStrength <- lm(xGoal ~ defendingTeamAverageTimeOnIce, data = even_strength_shots)
+defendingTeamNonEvenStrength <- lm(xGoal ~ defendingTeamAverageTimeOnIce, data = non_even_strength_shots)
+
+shootingTeamAllSituations <- lm(xGoal ~ shootingTeamAverageTimeOnIce, data = shots)
+shootingTeamEvenStrength <- lm(xGoal ~ shootingTeamAverageTimeOnIce, data = even_strength_shots)
+shootingTeamNonEvenStrength <- lm(xGoal ~ shootingTeamAverageTimeOnIce, data = non_even_strength_shots)
+
+iceTimeDifferenceAllSituations <- lm(xGoal ~ shootingTeamIceTimeDifferenceAllSituations, data = shots)
+iceTimeDifferenceEvenStrength <- lm(xGoal ~ shootingTeamIceDifferenceEvenStrength, data = even_strength_shots)
+iceTimeDifferenceNonEvenStrength <- lm(xGoal ~ shootingTeamIceDifferenceNonEvenStrength, data = non_even_strength_shots)
+
+# Combine models into a list
+models <- list(
+  DefendingTeamAllSituations = defendingTeamAllSituations,
+  DefendingTeamEvenStrength = defendingTeamEvenStrength,
+  DefendingTeamNonEvenStrength = defendingTeamNonEvenStrength,
+  ShootingTeamAllSituations = shootingTeamAllSituations,
+  ShootingTeamEvenStrength = shootingTeamEvenStrength,
+  ShootingTeamNonEvenStrength = shootingTeamNonEvenStrength,
+  IceTimeDifferenceAllSituations = iceTimeDifferenceAllSituations,
+  IceTimeDifferenceEvenStrength = iceTimeDifferenceEvenStrength,
+  IceTimeDifferenceNonEvenStrength = iceTimeDifferenceNonEvenStrength
+)
+
+# Use modelsummary to create a summary table of the models
+modelsummary(models, stars = TRUE, 
+             model_names = c(
+               "Defending Team All Situations", 
+               "Defending Team Even Strength", 
+               "Defending Team Non-Even Strength", 
+               "Shooting Team All Situations", 
+               "Shooting Team Even Strength", 
+               "Shooting Team Non-Even Strength", 
+               "Ice Time Difference All Situations", 
+               "Ice Time Difference Even Strength", 
+               "Ice Time Difference Non-Even Strength"
+             ), 
+             fmt = "%.5f") # use fmt to set the decimal places to 5 as digits was not working
+```
+
+
+
+# 5. Running Logistic Regressions to analyze our data
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(modelsummary)
+
+# Define the logistic regression models
+defendingTeamAllSituations <- glm(xGoal ~ defendingTeamAverageTimeOnIce, data = shots, family = binomial)
+defendingTeamEvenStrength <- glm(xGoal ~ defendingTeamAverageTimeOnIce, data = even_strength_shots, family = binomial)
+defendingTeamNonEvenStrength <- glm(xGoal ~ defendingTeamAverageTimeOnIce, data = non_even_strength_shots, family = binomial)
+
+shootingTeamAllSituations <- glm(xGoal ~ shootingTeamAverageTimeOnIce, data = shots, family = binomial)
+shootingTeamEvenStrength <- glm(xGoal ~ shootingTeamAverageTimeOnIce, data = even_strength_shots, family = binomial)
+shootingTeamNonEvenStrength <- glm(xGoal ~ shootingTeamAverageTimeOnIce, data = non_even_strength_shots, family = binomial)
+
+iceTimeDifferenceAllSituations <- glm(xGoal ~ shootingTeamIceTimeDifferenceAllSituations, data = shots, family = binomial)
+iceTimeDifferenceEvenStrength <- glm(xGoal ~ shootingTeamIceDifferenceEvenStrength, data = even_strength_shots, family = binomial)
+iceTimeDifferenceNonEvenStrength <- glm(xGoal ~ shootingTeamIceDifferenceNonEvenStrength, data = non_even_strength_shots, family = binomial)
+
+# Combine models into a list
+models <- list(
+    DefendingTeamAllSituations = defendingTeamAllSituations,
+    DefendingTeamEvenStrength = defendingTeamEvenStrength,
+    DefendingTeamNonEvenStrength = defendingTeamNonEvenStrength,
+    ShootingTeamAllSituations = shootingTeamAllSituations,
+    ShootingTeamEvenStrength = shootingTeamEvenStrength,
+    ShootingTeamNonEvenStrength = shootingTeamNonEvenStrength,
+    IceTimeDifferenceAllSituations = iceTimeDifferenceAllSituations,
+    IceTimeDifferenceEvenStrength = iceTimeDifferenceEvenStrength,
+    IceTimeDifferenceNonEvenStrength = iceTimeDifferenceNonEvenStrength
+)
+
+# Use modelsummary to create a summary table of the models
+modelsummary(models,
+    stars = TRUE,
+    model_names = c(
+        "Defending Team All Situations",
+        "Defending Team Even Strength",
+        "Defending Team Non-Even Strength",
+        "Shooting Team All Situations",
+        "Shooting Team Even Strength",
+        "Shooting Team Non-Even Strength",
+        "Ice Time Difference All Situations",
+        "Ice Time Difference Even Strength",
+        "Ice Time Difference Non-Even Strength"
+    ),
+    fmt = "%.5f"
+) # use fmt to set the decimal places to 5 as digits was not working
+```
+
+
+
+
+
+
+
+
+# Task 3
+
+At the end, we can also investigate whether shot outcomes vs. xGoals differ, and if more ice time might equal better shot outcomes than are expected. We can also compare the difference between average ice time for the shooting team vs. the defending team, to see the affect, if a bigger gap equals more dangerous outcomes for the shooting team and what this has to do with xGoals. Along with this, we can also generate a heatmap to see where the locations of the shots are when comparing average ice time of the defending team. This would help visualize if based on a certain cutoff, possibly average and below average ice time, and then above average ice time, to see how the locations of the shots change when comparing these two groups. 
