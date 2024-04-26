@@ -14,7 +14,7 @@ toc-depth: 2
 
 For my final project, I will be working alone, and will be doing it on the topic of hockey data. There is a wide variety of hockey data, but some of the most interesting data to me is shot data. Every single shot that has been taken over the past 15-20 years has been tracked with over 140 variables per shot, giving the most context possible to characterize every single kind of shot being taken.
 	Now, why is this data important to study? Shot data is some of the most important data in hockey, as it is used as the base of all hockey statistics. Shot data is used to calculate xGoals (expected goals) which is one of the main drivers for determining:
-1.	The performance of a given team
+1. The performance of a given team
 2. The performance of a given teams’ goalie
 
 Using a model the probability of each shot being a goal is calculated using factors such as the distance from the net, angle of the shot, type of shot, and what happened before the shot, amongst other factors. Now, by adding up the probabilities of a team’s shots during a game, you can calculate a team’s expected goals, and essentially measure the amount of offense that was generated during a game. This can also be used to see if a team got ‘unlucky’ or ‘goalied’ (outplayed by the other teams’ goalie and could’ve easily won the game if they got anywhere near their xG amount) or if a team simply just did not generate enough offense. It can also be used to see the performance of all goalies in the league, as the main driver for the ‘best’ goalie every season is their goals saved above expected (xG – Actual Goals). Now, as you can see the base of almost all team statistics is based off xG, which is based off all the shot data collected. 
@@ -177,18 +177,16 @@ arenaAdjustedXCordABS	Absolute value of the arenaAdjustedXCord
 	You are welcome to use this data in any work. Just please cite MoneyPuck.com
 
 
-# Set your working directory 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-rm(list = ls())
-setwd("/Users/connorraney/Desktop/desktop/QTM3605/scripts/Final Project")
-```
-
 # 1. Importing the Data
 
 Importing the Moneypuck Dataset & Examining the initial variables. After merging these two datasets together, we have 238,304 shots in total from the 2022-2023 season and the 2023-2024 data. I was looking forward to using all of the data we have available, but we will have to settle for just these two seasons as the dataset for all of them is just too large.
 
 ```{r}
+# Set working directory
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+setwd("/Users/connorraney/Desktop/desktop/QTM3605/scripts/Final Project")
+
 # Import 2022-2023 data
 shots2022 <- read.csv("shots_2022.csv") 
 
@@ -297,6 +295,10 @@ averageShootingTeamIceTimeDifferenceAllSituations <- meanShootingTeamIceTimeAllS
 averageShootingTeamIceTimeDifferenceEvenStrength <- meanShootingTeamIceTimeEvenStrength - meanDefendingTeamIceTimeEvenStrength
 # Non-Even Strength
 averageShootingTeamIceTimeDifferenceNonEvenStrength <- meanShootingTeamIceTimeNonEvenStrength - meanDefendingTeamIceTimeNonEvenStrength
+
+
+# Change shotType to factor for later use in PSM
+shots$shotType <- as.factor(shots$shotType)
 ```
 
 
@@ -424,12 +426,114 @@ modelsummary(models,
 ```
 
 
+# 6. Running Propensity Score Matching to analyze our data
+Before starting, we are going to choose 5-6 baseline covariates to use for our analysis with some other variables that may affect the outcome of the xGoals value. 
+
+From Moneypuck, we can see these are the variables used in their shot prediction model to produce xGoals:
+
+Variables In Shot Prediction Model:
+
+1.) Shot Distance From Net
+2.) Time Since Last Game Event
+3.) Shot Type (Slap, Wrist, Backhand, etc)
+4.) Speed From Previous Event
+5.) Shot Angle
+6.) East-West Location on Ice of Last Event Before the Shot
+7.) If Rebound, difference in shot angle divided by time since last shot
+8.) Last Event That Happened Before the Shot (Faceoff, Hit, etc)
+9.) Other team's # of skaters on ice
+10.) East-West Location on Ice of Shot
+11.) Man Advantage Situation
+12.) Time since current Powerplay started
+13.) Distance From Previous Event
+14.) North-South Location on Ice of Shot
+15.) Shooting on Empty Net
+
+This info, and more of an explanation on the calculations and ways of solving the xGoals calculation can be found at: https://moneypuck.com/about.htm 
+
+With this info, I am going to use:
+1. Shot Location (x) --> xCordAdjusted (abs value)
+2. Shot Location (y) --> yCordAdjusted (abs value)
+3. Shot Type --> shotType
+4. Shot Rebound --> shotRebound
+5. Speed From Previous Event --> speedFromLastEvent
+6. Shot Angle --> shotAngleAdjusted (for simplicity sake we will use the abs value)
+
+At first, I also had shotDistance, but realized that with the x and y coordinates, we were most likely using some variables that are too closely related, so I got rid of distance and left in the x and y coordinates.
+
+These are good to use as baselines to work off of for our propensity score matching analysis.
+
+For our treatment, we are going to use the median amount of time on ice for the defending team. Let's create a treatment variable:
+
+```{r}
+# Create the treatment variable for PSM
+medianDefendingTime <- median(shots$defendingTeamAverageTimeOnIce)
+print(medianDefendingTime)
+
+meanxGoals <- mean(shots$xGoal)
+print(meanxGoals)
+```
+
+Now, with our median value, we can create a binary treatment variable:
+```{r}
+shots$treatment <- ifelse(shots$defendingTeamAverageTimeOnIce >= medianDefendingTime, 1, 0)
+```
+
+Now, we can continue with our propensity score matching analysis using the treatment variable we just created and our chosen baseline covariates.
+```{r}
+# 1. Estimate Propensity Scores
+    # Load necessary library for logistic regression
+    library(stats)
+
+    # Estimate the propensity score using logistic regression
+    logistic_model <- glm(treatment ~ xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, family = binomial(), data = shots)
+
+    # Make predictions and store as a propensity score in the dataset
+    shots$propensity_score <- predict(logistic_model, type = "response")
+
+# 2. Match Units Using PSM
+    # Load necessary library for matching
+    library(MatchIt)
+
+    # Use MatchIt to match treatment/control on defined observable covariates
+    match_model <- matchit(treatment ~ xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, method = "nearest", data = shots)
+
+    # Create a data frame with only matched observations
+    matched <- match.data(match_model)
 
 
+# 3. Check Baseline Covariates
+    # Load the necessary library
+    library(modelsummary)
+   # Create a list to store models for each covariate
+    models_matched <- list()
 
+    # Add linear models for each covariate against the treatment variable
+    models_matched[['xCordAdjusted']] <- lm(xCordAdjusted ~ treatment, data = matched)
+    models_matched[['yCordAdjusted']] <- lm(yCordAdjusted ~ treatment, data = matched)
+    models_matched[['shotType']] <- lm(shotType ~ treatment, data = matched)
+    models_matched[['shotRebound']] <- lm(shotRebound ~ treatment, data = matched)
+    models_matched[['speedFromLastEvent']] <- lm(speedFromLastEvent ~ treatment, data = matched)
+    models_matched[['shotAngleAdjusted']] <- lm(shotAngleAdjusted ~ treatment, data = matched)
 
+    # Generate a summary table of the models
+    modelsummary(models_matched, stars = TRUE, title = "Differences between treatment and control group, Matched Sample")
 
+# 4. Estimate Effects Using PSM Sample
+    # Load the necessary library
+    library(modelsummary)
 
-# Task 3
+    # Create a list to store the models
+    models_effects <- list()
 
-At the end, we can also investigate whether shot outcomes vs. xGoals differ, and if more ice time might equal better shot outcomes than are expected. We can also compare the difference between average ice time for the shooting team vs. the defending team, to see the affect, if a bigger gap equals more dangerous outcomes for the shooting team and what this has to do with xGoals. Along with this, we can also generate a heatmap to see where the locations of the shots are when comparing average ice time of the defending team. This would help visualize if based on a certain cutoff, possibly average and below average ice time, and then above average ice time, to see how the locations of the shots change when comparing these two groups. 
+    # Model with only the treatment effect on xGoal
+    models_effects[['Effects']] <- lm(xGoal ~ treatment, data = matched)
+
+    # Model with treatment effect and controls on xGoal
+    models_effects[['Effects + Controls']] <- lm(xGoal ~ treatment + xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, data = matched)
+
+    # Generate a summary table of the models
+    modelsummary(models_effects, stars = TRUE, title = "Effects w/PSM")
+```
+
+After running this, we can see that the treatment effect is statistically significant, both with and without the controls. For the effects, a coefficient of 0.012, also being significant, shows that there is a very big impact of the treatment on the xGoals. This coefficient represents approximately 16.5% of the mean xGoals per shot which is 0.0727, so we can see that if you are above the median time spent on ice for the defending team, there is a meaningful effect on the likelihood or quality of scoring a goal, measured by xGoals. 
