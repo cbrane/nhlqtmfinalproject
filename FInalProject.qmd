@@ -25,7 +25,7 @@ Having given some background to what shot data is, and what xGoals are, you can 
 
 # The Question
 
-Here is one possible question that I have constructed using the Moneypuck data that I believe would work well for research question: Influence of Defensive Player Fatigue on Offensive Expected Goals: Does the amount of time a team collectively has been on the ice affect the other (offensive) team’s generation of offensive chances, measured by expected goals (xGoals)? Outcome Variable (Dependent Variable): xGoals: The expected goals value of each shot taken by the offensive team. Treatment Variable (Independent Variable): defensiveTeamIceTime: This would be a constructed variable representing the total amount of time the defensive team's players have collectively spent on the ice up to the point of each shot taken by the offensive team. Can be calculated based on the following variables: defendingTeamForwardsOnIce, defendingTeamDefencemenOnIce, defendingTeamAverageTimeOnIceOfForwards, and defendingTeamAverageTimeOnIceOfDefencemen. Potential Confounders: shotDistance: The distance from the net at which the shot is taken. shotType: The type of shot (e.g., slap, wrist, backhand). shotAngle: The angle of the shot relative to the goal. speedFromPreviousEvent: The speed of the player from the previous event to the shot. manAdvantageSituation: The man advantage situation (e.g., power play, even strength). defensiveTeamSkaters: The number of skaters on the ice for the defensive team. timeSinceLastEvent: The time elapsed since the last game event before the shot. Potential Colliders: flurryAdjustedXGoals: The flurry adjusted expected goals value might be influenced by both the defensive team's ice time (as it affects the likelihood of flurries) and the regular xGoals (as it is a modified version of xGoals). We can also investigate xGoals vs. Shot Outcomes in these cases to see if more ice time may be associated with more goals against vs. expected.
+Here is one possible question that I have constructed using the Moneypuck data that I believe would work well for research question: Influence of Defensive Player Fatigue on Offensive Expected Goals: Does the amount of time the defensive team has collectively been on the ice affect the other (offensive) team’s generation of scoring chances, measured by expected goals (xGoals)? Outcome Variable (Dependent Variable): xGoals: The expected goals value of each shot taken by the offensive team. Treatment Variable (Independent Variable): defensiveTeamIceTime: This would be a constructed variable representing the total amount of time the defensive team's players have collectively spent on the ice up to the point of each shot taken by the offensive team. Can be calculated based on the following variables: defendingTeamForwardsOnIce, defendingTeamDefencemenOnIce, defendingTeamAverageTimeOnIceOfForwards, and defendingTeamAverageTimeOnIceOfDefencemen. Potential Confounders: shotDistance: The distance from the net at which the shot is taken. shotType: The type of shot (e.g., slap, wrist, backhand). shotAngle: The angle of the shot relative to the goal. speedFromPreviousEvent: The speed of the player from the previous event to the shot. manAdvantageSituation: The man advantage situation (e.g., power play, even strength). defensiveTeamSkaters: The number of skaters on the ice for the defensive team. timeSinceLastEvent: The time elapsed since the last game event before the shot. Potential Colliders: flurryAdjustedXGoals: The flurry adjusted expected goals value might be influenced by both the defensive team's ice time (as it affects the likelihood of flurries) and the regular xGoals (as it is a modified version of xGoals). We can also investigate xGoals vs. Shot Outcomes in these cases to see if more ice time may be associated with more goals against vs. expected.
 
 # Data
 
@@ -296,9 +296,27 @@ averageShootingTeamIceTimeDifferenceEvenStrength <- meanShootingTeamIceTimeEvenS
 # Non-Even Strength
 averageShootingTeamIceTimeDifferenceNonEvenStrength <- meanShootingTeamIceTimeNonEvenStrength - meanDefendingTeamIceTimeNonEvenStrength
 
+# Median shootingTeamIceTimeAllSituations
+medianShootingTeamIceTimeAllSituations <- median(shots$shootingTeamAverageTimeOnIce)
+
 
 # Change shotType to factor for later use in PSM
 shots$shotType <- as.factor(shots$shotType)
+
+# Change yCoordAdjusted to absolute value (make all values positive)
+shots$yCordAdjusted <- abs(shots$yCordAdjusted)
+
+# Evaluating our main variables
+# Descriptive Statistics for the variables we will use for PSM
+
+# Define the variables to run summary on
+variables <- c("xCordAdjusted", "yCordAdjusted", "shotRebound", "speedFromLastEvent", "shotAngleAdjusted", "xGoal")
+
+# Apply the summary function to each of the selected variables in the shots dataframe
+summary_results <- lapply(shots[variables], summary)
+
+# Print the summary results for each variable
+print(summary_results)
 ```
 
 
