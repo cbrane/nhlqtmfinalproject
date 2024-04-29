@@ -485,8 +485,8 @@ For our treatment, we are going to use the median amount of time on ice for the 
 
 ```{r}
 # Create the treatment variable for PSM
-medianDefendingTime <- median(shots$defendingTeamAverageTimeOnIce)
-print(medianDefendingTime)
+defendingTimeTreatmentValue <- quantile(shots$defendingTeamAverageTimeOnIce, 0.75)
+print(defendingTimeTreatmentValue)
 
 meanxGoals <- mean(shots$xGoal)
 print(meanxGoals)
@@ -494,64 +494,114 @@ print(meanxGoals)
 
 Now, with our median value, we can create a binary treatment variable:
 ```{r}
-shots$treatment <- ifelse(shots$defendingTeamAverageTimeOnIce >= medianDefendingTime, 1, 0)
+shots$treatment <- ifelse(shots$defendingTeamAverageTimeOnIce >= defendingTimeTreatmentValue, 1, 0)
 ```
 
 Now, we can continue with our propensity score matching analysis using the treatment variable we just created and our chosen baseline covariates.
+# Estimate models with original observational data
+
 ```{r}
-# 1. Estimate Propensity Scores
-    # Load necessary library for logistic regression
-    library(stats)
-
-    # Estimate the propensity score using logistic regression
-    logistic_model <- glm(treatment ~ xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, family = binomial(), data = shots)
-
-    # Make predictions and store as a propensity score in the dataset
-    shots$propensity_score <- predict(logistic_model, type = "response")
-
-# 2. Match Units Using PSM
-    # Load necessary library for matching
-    library(MatchIt)
-
-    # Use MatchIt to match treatment/control on defined observable covariates
-    match_model <- matchit(treatment ~ xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, method = "nearest", data = shots)
-
-    # Create a data frame with only matched observations
-    matched <- match.data(match_model)
-
-
-# 3. Check Baseline Covariates
-    # Load the necessary library
-    library(modelsummary)
-   # Create a list to store models for each covariate
-    models_matched <- list()
-
-    # Add linear models for each covariate against the treatment variable
-    models_matched[['xCordAdjusted']] <- lm(xCordAdjusted ~ treatment, data = matched)
-    models_matched[['yCordAdjusted']] <- lm(yCordAdjusted ~ treatment, data = matched)
-    models_matched[['shotType']] <- lm(shotType ~ treatment, data = matched)
-    models_matched[['shotRebound']] <- lm(shotRebound ~ treatment, data = matched)
-    models_matched[['speedFromLastEvent']] <- lm(speedFromLastEvent ~ treatment, data = matched)
-    models_matched[['shotAngleAdjusted']] <- lm(shotAngleAdjusted ~ treatment, data = matched)
-
-    # Generate a summary table of the models
-    modelsummary(models_matched, stars = TRUE, title = "Differences between treatment and control group, Matched Sample")
-
-# 4. Estimate Effects Using PSM Sample
-    # Load the necessary library
-    library(modelsummary)
-
-    # Create a list to store the models
-    models_effects <- list()
-
-    # Model with only the treatment effect on xGoal
-    models_effects[['Effects']] <- lm(xGoal ~ treatment, data = matched)
-
-    # Model with treatment effect and controls on xGoal
-    models_effects[['Effects + Controls']] <- lm(xGoal ~ treatment + xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, data = matched)
-
-    # Generate a summary table of the models
-    modelsummary(models_effects, stars = TRUE, title = "Effects w/PSM")
+library(modelsummary)
+models_naive <- list()
+models_naive[['Naive']] <- lm(xGoal ~ treatment, shots)
+models_naive[['Naive + Controls']] <- lm(xGoal ~ treatment + xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, shots)
+modelsummary(models_naive, stars=TRUE, title="Naive Models")
 ```
 
-After running this, we can see that the treatment effect is statistically significant, both with and without the controls. For the effects, a coefficient of 0.012, also being significant, shows that there is a very big impact of the treatment on the xGoals. This coefficient represents approximately 16.5% of the mean xGoals per shot which is 0.0727, so we can see that if you are above the median time spent on ice for the defending team, there is a meaningful effect on the likelihood or quality of scoring a goal, measured by xGoals. 
+# Examine differences between treatment and control
+
+```{r}
+library(knitr)
+library(modelsummary)
+models_naive <- list()
+models_naive[['xCordAdjusted']] <- lm(xCordAdjusted ~ treatment, shots)
+models_naive[['yCordAdjusted']] <- lm(yCordAdjusted ~ treatment, shots)
+models_naive[['shotType']] <- lm(shotType ~ treatment, shots)
+models_naive[['shotRebound']] <- lm(shotRebound ~ treatment, shots)
+models_naive[['speedFromLastEvent']] <- lm(speedFromLastEvent ~ treatment, shots)
+models_naive[['shotAngleAdjusted']] <- lm(shotAngleAdjusted ~ treatment, shots)
+
+modelsummary(models_naive, stars = TRUE, title = "Raw differences between treatment and control group")
+```
+
+# Estimate and Extract Propensity Scores
+
+```{r}
+#### Estimating the propensity score
+logistic_model = glm(formula = treatment ~ xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, family = binomial(), data = shots)
+
+# make predictions and store in 'predictions'
+predictions = predict(logistic_model, shots)
+
+# column bind with predictions
+shots = cbind(shots, predictions)
+
+library(ggplot2)
+ggplot(shots,aes(x = predictions)) +
+  geom_histogram(color = "white") +
+  facet_wrap(~treatment) +
+  xlab("Probability of treatment") +
+  theme_bw()
+```
+
+# Match units in a one-to-one match using PSM
+
+```{r}
+#MatchIt function does not allow for missing data, so best to check if we have any.
+library(modelsummary)
+# datasummary_skim(shots) --> we do not have any missing data, rendered once and checked. it is best to comment this out as it takes ~10-15 minutes to render each time running this.
+
+#install.packages("MatchIt")
+library(MatchIt)
+
+# Use matchit to match treatment/control on defined observable covariates
+match_model <- matchit(treatment ~ xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, method = "nearest", data = shots)
+
+# Create a data frame with only matched observations
+matched <- match.data(match_model)
+```
+
+# How well did the match go?
+
+## Check Common Support
+
+```{r}
+# See Common Support
+library(ggplot2)
+ggplot(matched,aes(x=predictions)) + 
+  geom_histogram(data=subset(matched,treatment == 1),fill = "black", alpha = 0.7) +
+  geom_histogram(data=subset(matched,treatment == 0),fill = "blue", alpha = 0.7) +
+  xlab("Probability of Treatment") +
+  ggtitle("Common Support") +
+  theme_bw()
+```
+
+## Check Baseline Covariates
+
+```{r}
+# Examine differences between treatment and control after matching
+# Put the models into model summary
+library(modelsummary)
+models_matched <- list()
+
+models_matched[['xCordAdjusted']] <- lm(xCordAdjusted ~ treatment, matched)
+models_matched[['yCordAdjusted']] <- lm(yCordAdjusted ~ treatment, matched)
+models_matched[['shotType']] <- lm(shotType ~ treatment, matched)
+models_matched[['shotRebound']] <- lm(shotRebound ~ treatment, matched)
+models_matched[['speedFromLastEvent']] <- lm(speedFromLastEvent ~ treatment, matched)
+models_matched[['shotAngleAdjusted']] <- lm(shotAngleAdjusted ~ treatment, matched)
+
+modelsummary(models_matched, stars=TRUE, title="Differences between treatment and control group, Matched Sample")
+```
+
+# Estimate effects using PSM sample
+
+Note that we don't truly need controls here, though you can still put them in to get a more precise estimate.
+
+```{r}
+library(modelsummary)
+models_effects <- list()
+models_effects[['Effects']] <- lm(xGoal ~ treatment, matched)
+models_effects[['Effects + Controls']] <- lm(xGoal ~ treatment + xCordAdjusted + yCordAdjusted + shotType + shotRebound + speedFromLastEvent + shotAngleAdjusted, matched)
+modelsummary(models_effects, stars=TRUE, title="Effects w/PSM")
+```
