@@ -23,11 +23,11 @@ In addition to this, the Moneypuck model, amongst other models, has xGoal, xFroz
 Having given some background to what shot data is, and what xGoals are, you can now see why shot data is so important in hockey as it is used not only for these important calculations, but much more. Moneypuck, a hockey statistics and prediction website, has publicly accessible shot data, totaling up to 1,717,746 shots from the 2007-2022 seasons, in addition to almost 100,000 shots from this season so far. They also have a full description of all the variables in addition to more details with a full csv data dictionary which I will attach. Moneypuck shot data is collected both from the ‘semi-public’ NHL API, ESPN, and other sources which help them to compile a full dataset of shot data to work with.
 
 
-# The Question
+## The Question
 
 Here is one possible question that I have constructed using the Moneypuck data that I believe would work well for research question: Influence of Defensive Player Fatigue on Offensive Expected Goals: Does the amount of time the defensive team has collectively been on the ice affect the other (offensive) team’s generation of scoring chances, measured by expected goals (xGoals)? Outcome Variable (Dependent Variable): xGoals: The expected goals value of each shot taken by the offensive team. Treatment Variable (Independent Variable): defensiveTeamIceTime: This would be a constructed variable representing the total amount of time the defensive team's players have collectively spent on the ice up to the point of each shot taken by the offensive team. Can be calculated based on the following variables: defendingTeamForwardsOnIce, defendingTeamDefencemenOnIce, defendingTeamAverageTimeOnIceOfForwards, and defendingTeamAverageTimeOnIceOfDefencemen. Potential Confounders: shotDistance: The distance from the net at which the shot is taken. shotType: The type of shot (e.g., slap, wrist, backhand). shotAngle: The angle of the shot relative to the goal. speedFromPreviousEvent: The speed of the player from the previous event to the shot. manAdvantageSituation: The man advantage situation (e.g., power play, even strength). defensiveTeamSkaters: The number of skaters on the ice for the defensive team. timeSinceLastEvent: The time elapsed since the last game event before the shot. Potential Colliders: flurryAdjustedXGoals: The flurry adjusted expected goals value might be influenced by both the defensive team's ice time (as it affects the likelihood of flurries) and the regular xGoals (as it is a modified version of xGoals). We can also investigate xGoals vs. Shot Outcomes in these cases to see if more ice time may be associated with more goals against vs. expected.
 
-# Data
+## Data
 
 From Moneypuck, "All historical shot data is available to download. This includes 1,717,746 shots from the 2007-2008 to 2022-2023 seasons. Data for the 2023-2024 season is also available and updated nightly on this page. Saved shots on goal, missed shots, and goals are included. Blocked shots are not included in these datasets. There are 124 attributes for each shot, including everything from the player and goalie involved in the shot to angles, distances, what happened before the shot, and how long players had been on the ice when the shot was taken. Each shot also has model scores for its probability of being a goal (xGoals) as well as other models such as for the chance there will be a rebound after the shot, the probability the shot will miss the net, and whether the goalie will freeze the puck after the shot. The data has been collected from several sources including the NHL and ESPN. A good amount of data cleaning has also been done on the data. Arena adjusted shot coordinates and distances are also calculated in the dataset using the strategy War-On-Ice used from the method proposed by Schuckers and Curros."
 
@@ -35,7 +35,7 @@ We will only be using the data from the 2022-2023 and 2023-2024 season however, 
 
 The data has been downloded from Moneypuck with all shots as of 2024-04-25 14:45 Eastern Time. You can find the data at the following link: https://moneypuck.com/data.htm
 
-# Data Dictionary
+## Data Dictionary
 
 Variable	Definition	
 shotID	Unique id for each shot	
@@ -481,7 +481,7 @@ At first, I also had shotDistance, but realized that with the x and y coordinate
 
 These are good to use as baselines to work off of for our propensity score matching analysis.
 
-For our treatment, we are going to use the median amount of time on ice for the defending team. Let's create a treatment variable:
+For our treatment, we are going to use the 75th percentile of defensiveTeamAverageTimeOnIce. Let's create a treatment variable:
 
 ```{r}
 # Create the treatment variable for PSM
@@ -498,7 +498,7 @@ shots$treatment <- ifelse(shots$defendingTeamAverageTimeOnIce >= defendingTimeTr
 ```
 
 Now, we can continue with our propensity score matching analysis using the treatment variable we just created and our chosen baseline covariates.
-# Estimate models with original observational data
+## Estimate models with original observational data
 
 ```{r}
 library(modelsummary)
@@ -508,7 +508,7 @@ models_naive[['Naive + Controls']] <- lm(xGoal ~ treatment + xCordAdjusted + yCo
 modelsummary(models_naive, stars=TRUE, title="Naive Models")
 ```
 
-# Examine differences between treatment and control
+## Examine differences between treatment and control
 
 ```{r}
 library(knitr)
@@ -524,7 +524,7 @@ models_naive[['shotAngleAdjusted']] <- lm(shotAngleAdjusted ~ treatment, shots)
 modelsummary(models_naive, stars = TRUE, title = "Raw differences between treatment and control group")
 ```
 
-# Estimate and Extract Propensity Scores
+## Estimate and Extract Propensity Scores
 
 ```{r}
 #### Estimating the propensity score
@@ -544,7 +544,7 @@ ggplot(shots,aes(x = predictions)) +
   theme_bw()
 ```
 
-# Match units in a one-to-one match using PSM
+## Match units in a one-to-one match using PSM
 
 ```{r}
 #MatchIt function does not allow for missing data, so best to check if we have any.
@@ -561,7 +561,7 @@ match_model <- matchit(treatment ~ xCordAdjusted + yCordAdjusted + shotType + sh
 matched <- match.data(match_model)
 ```
 
-# How well did the match go?
+## How well did the match go?
 
 ## Check Common Support
 
@@ -589,12 +589,12 @@ models_matched[['yCordAdjusted']] <- lm(yCordAdjusted ~ treatment, matched)
 models_matched[['shotType']] <- lm(shotType ~ treatment, matched)
 models_matched[['shotRebound']] <- lm(shotRebound ~ treatment, matched)
 models_matched[['speedFromLastEvent']] <- lm(speedFromLastEvent ~ treatment, matched)
-models_matched[['shotAngleAdjusted']] <- lm(shotAngleAdjusted ~ treatment, matched)
+models_matched[['shotAngleAdjusted']] <- lm(shotAngleAdjusted ~ treatment, matched)zZ
 
 modelsummary(models_matched, stars=TRUE, title="Differences between treatment and control group, Matched Sample")
 ```
 
-# Estimate effects using PSM sample
+## Estimate effects using PSM sample
 
 Note that we don't truly need controls here, though you can still put them in to get a more precise estimate.
 
