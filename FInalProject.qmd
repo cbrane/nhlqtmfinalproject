@@ -10,6 +10,9 @@ toc: true
 toc-depth: 2
 ---
 
+# Info
+This is the workspace for my final project. This is a rough draft of the information and analysis that was used to write the paper which you can also find inside this Github repo.
+
 # Introduction
 
 For my final project, I will be working alone, and will be doing it on the topic of hockey data. There is a wide variety of hockey data, but some of the most interesting data to me is shot data. Every single shot that has been taken over the past 15-20 years has been tracked with over 140 variables per shot, giving the most context possible to characterize every single kind of shot being taken.
