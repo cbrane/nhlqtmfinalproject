@@ -51,4 +51,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## Acknowledgements
 - [Moneypuck.com](https://moneypuck.com/) for providing extensive and detailed NHL shot data.
-- Contributors to the NHL and ESPN APIs for data collection methods.
+- Contributors to the NHL API and ESPN for data collection methods.
